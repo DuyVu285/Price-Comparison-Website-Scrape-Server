@@ -8,6 +8,7 @@ const config = {
     PRODUCTS_GRID_SELECTOR: '#main > div > div.datit-bg-white > div > div > div.row.products_archive_grid > div',
     LOAD_MORE_BUTTON_SELECTOR: '#pp_loadmore_products',
     DELAY_TIME: 2000,
+    COLLECTION: 'xgear-products',
 };
 
 @Injectable()
@@ -19,13 +20,10 @@ export class XgearScraperService {
         const page = await browser.newPage();
 
         await this.handleRequestInterception(page);
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.goto(url, { waitUntil: 'networkidle0' });
 
         await page.waitForSelector(config.SEARCH_BOX_SELECTOR);
-        const searchBox = await page.$(config.SEARCH_BOX_SELECTOR);
-        await searchBox.type(config.SEARCH_TARGET);
-        await searchBox.press('Enter');
-        await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+        await this.onSearchBox(page);
 
         await this.loadMoreProducts(page);
         const data = await this.extractProducts(page);
@@ -47,6 +45,14 @@ export class XgearScraperService {
         });
     }
 
+    private async onSearchBox(page: Page) {
+        const searchBox = await page.$(config.SEARCH_BOX_SELECTOR);
+        await searchBox.type(config.SEARCH_TARGET);
+        await searchBox.press('Enter');
+        await page.waitForNavigation({ waitUntil: 'networkidle0' });
+        return page;
+    }
+
     private async extractProducts(page: Page) {
         const productsGridContent = await page.$$eval(config.PRODUCTS_GRID_SELECTOR, (elements) => {
             return elements
@@ -61,7 +67,6 @@ export class XgearScraperService {
                     const nameElement = element.querySelector(config.PRODUCT_NAME_SELECTOR);
                     const name = nameElement ? nameElement.textContent.trim() : '';
 
-                    console.log(name)
                     if (name.toLowerCase().includes('laptop')) {
                         const priceElement = element.querySelector(config.PRICE_SELECTOR);
                         const priceText = priceElement ? priceElement.textContent.trim() : 'Price not available';
@@ -78,6 +83,7 @@ export class XgearScraperService {
                 })
                 .filter(product => product !== null);
         });
+        console.log(productsGridContent.length)
         return productsGridContent;
     }
 
@@ -94,6 +100,6 @@ export class XgearScraperService {
     }
 
     private async storeDataToDatabase(data: any) {
-        return this.ProductsService.createMany(data, 'xgear-products');
+        return this.ProductsService.createMany(data, config.COLLECTION);
     }
 }

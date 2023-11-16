@@ -8,7 +8,7 @@ import { Product, ProductSchema } from 'src/schemas/product.schema';
     MongooseModule.forFeature([
       { name: 'xgear-products', schema: ProductSchema },
       { name: 'gearvn-products', schema: ProductSchema },
-      { name: 'cellphoneS-products', schema: ProductSchema },
+      { name: 'fptshop-products', schema: ProductSchema },
     ]),
   ],
   providers: [ProductsService],
