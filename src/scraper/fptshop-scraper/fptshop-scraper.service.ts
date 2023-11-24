@@ -5,7 +5,7 @@ import puppeteer, { Page } from 'puppeteer';
 const config = {
     SEARCH_BOX_SELECTOR: '#key',
     SEARCH_TARGET: 'laptop',
-    PRODUCTS_GRID_SELECTOR: '#main > section > div > div.card.cs-card > div.row-flex > div',
+    PRODUCTS_GRID_SELECTOR: '#main > section > div > div.card.cs-card > div > div',
     LOAD_MORE_BUTTON_SELECTOR: '#main > section > div > div.card.cs-card > div > div.c-comment-loadMore > a',
     DELAY_TIME: 2000,
     COLLECTION: 'fptshop-products',
@@ -16,34 +16,20 @@ export class FptshopScraperService {
     constructor(private readonly ProductsService: ProductsService) { }
 
     async scrapeWebsite(url: string): Promise<string> {
-        const browser = await puppeteer.launch();
+        const browser = await puppeteer.launch({});
         const page = await browser.newPage();
 
-        await this.handleRequestInterception(page);
-        await page.goto(url, { waitUntil: 'networkidle0' });
-
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
 
         await page.waitForSelector(config.SEARCH_BOX_SELECTOR);
         await this.onSearchBox(page);
 
         await this.loadMoreProducts(page);
-        await this.extractProducts(page);
-        //await this.storeDataToDatabase(data);
+        const data = await this.extractProducts(page);
+        await this.storeDataToDatabase(data);
 
         await browser.close();
         return 'Scraped data from fptshop.com.vn';
-    }
-
-    private async handleRequestInterception(page: Page) {
-        page.setRequestInterception(true)
-        page.on('request', (request) => {
-            if (request.resourceType() === 'stylesheet' || request.resourceType() === 'font' || request.resourceType() === 'image') {
-                request.abort();
-            }
-            else {
-                request.continue();
-            }
-        });
     }
 
     private async onSearchBox(page: Page) {
@@ -52,47 +38,6 @@ export class FptshopScraperService {
         await searchBox.press('Enter');
         await page.waitForNavigation({ waitUntil: 'networkidle0' });
         return page;
-    }
-
-    private async extractProducts(page: Page) {
-        const productsGridContent = await page.$$eval(config.PRODUCTS_GRID_SELECTOR, (elements) => {
-            console.log(elements.length)
-            return elements
-                .map(element => {
-                    console.log(element)
-                    const config = {
-                        PRODUCT_NAME_SELECTOR: 'div.cdt-product__info > h3 > a',
-                        PRICE_SELECTOR: 'div.cdt-product__show-promo > div.progress',
-                        //IMAGE_URL_SELECTOR: 'div.cdt-product__img > a > span > img',
-                        //DESCRIPTION_SELECTOR: 'div.cdt-product__info > div.cdt-product__config > div',
-                        //BASE_URL_SELECTOR: 'div.cdt-product__info > h3 > a',
-                    }
-                    const nameElement = element.querySelector(config.PRODUCT_NAME_SELECTOR);
-                    const name = nameElement ? nameElement.textContent.trim() : '';
-
-                    if (name.toLowerCase().includes('laptop')) {
-                        const priceElement = element.querySelector(config.PRICE_SELECTOR);
-                        const priceText = priceElement ? priceElement.textContent.trim() : 'Price not available';
-                        const price = priceText.includes('Price not available') ? null : parseInt(priceText.replace(/[^\d]/g, ''), 10);
-                        //const description = Array.from(element.querySelectorAll(config.DESCRIPTION_SELECTOR)).map(el => el.textContent.trim());
-                        //const imageUrl = element.querySelector(config.IMAGE_URL_SELECTOR).getAttribute('src');
-                        //const baseUrlElement = element.querySelector(config.BASE_URL_SELECTOR);
-                        //const baseUrl = baseUrlElement ? `https://fptshop.com.vn${baseUrlElement.getAttribute('href')}` : '';
-
-                        //console.log('Product price', priceElement)
-                        //console.log('Description', description)
-                        //console.log('Image URL', imageUrl)    
-                        //console.log('Base URL', baseUrl)
-
-                        return { name, price };
-                    }
-
-                    return null;
-                })
-                .filter(product => product !== null);
-        });
-        console.log(productsGridContent)
-        return productsGridContent;
     }
 
     private async loadMoreProducts(page: Page) {
@@ -105,13 +50,49 @@ export class FptshopScraperService {
             if (loadMoreButton) {
                 await loadMoreButton.click();
                 await new Promise(resolve => setTimeout(resolve, DELAY_TIME));
-                loadMoreCount++;
                 console.log(`Load ${loadMoreCount}`);
+                loadMoreCount++;
             }
         }
     }
 
     private async storeDataToDatabase(data: any) {
         return this.ProductsService.createMany(data, config.COLLECTION);
+    }
+
+    private async extractProducts(page: Page) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const productsGridContent = await page.$$eval(config.PRODUCTS_GRID_SELECTOR, (elements) => {
+            return elements
+                .map(element => {
+                    const config = {
+                        PRODUCT_NAME_SELECTOR: 'div.cdt-product__info > h3 > a',
+                        PRICE_SELECTOR: 'div.cdt-product__show-promo > div.progress',
+                        DESCRIPTION_SELECTOR: 'div.cdt-product__info > div.cdt-product__config > div',
+                        URL_SELECTOR: 'div.cdt-product__info > h3 > a',
+                    }
+                    const nameElement = element.querySelector(config.PRODUCT_NAME_SELECTOR);
+                    const name = nameElement ? nameElement.textContent.trim() : '';
+
+                    if (name.toLowerCase().includes('laptop')) {
+                        const priceElement = element.querySelector(config.PRICE_SELECTOR);
+                        const priceText = priceElement ? priceElement.textContent.trim() : 'Price not available';
+                        const price = priceText.includes('Price not available') ? null : parseInt(priceText.replace(/[^\d]/g, ''), 10);
+
+                        const description = Array.from(element.querySelectorAll(config.DESCRIPTION_SELECTOR)).map(el => el.textContent.trim());
+
+                        const baseUrlElement = element.querySelector(config.URL_SELECTOR);
+                        const url = baseUrlElement ? `https://fptshop.com.vn${baseUrlElement.getAttribute('href')}` : '';
+
+                        console.log({ name, price, description, url });
+                        return { name, price, description, url };
+                    } 
+                    return null;
+                })
+                .filter(product => product !== null);
+        });
+        console.log(productsGridContent)
+        console.log('Products Scraped: ', productsGridContent.length)
+        return productsGridContent;
     }
 }

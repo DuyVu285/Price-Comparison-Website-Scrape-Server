@@ -11,8 +11,5 @@ export class CreateProductDto {
     description: string[];
 
     @IsString()
-    imageUrl: string;
-
-    @IsString()
-    baseUrl: string;
+    url: string;
 }

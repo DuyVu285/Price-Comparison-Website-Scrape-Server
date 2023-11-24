@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import puppeteer, { Page } from 'puppeteer';
 
 const config = {
+    WEB_URL: 'https://xgear.net/',
     SEARCH_BOX_SELECTOR: '#woocommerce-product-search-field',
     SEARCH_TARGET: 'laptop',
     PRODUCTS_GRID_SELECTOR: '#main > div > div.datit-bg-white > div > div > div.row.products_archive_grid > div',
@@ -15,13 +16,12 @@ const config = {
 export class XgearScraperService {
     constructor(private readonly ProductsService: ProductsService) { }
 
-    async scrapeWebsite(url: string): Promise<string> {
+    async scrapeWebsite(): Promise<string> {
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
 
         await this.handleRequestInterception(page);
-        await page.goto(url, { waitUntil: 'networkidle0' });
-
+        await page.goto(config.WEB_URL, { waitUntil: 'networkidle0' });
         await page.waitForSelector(config.SEARCH_BOX_SELECTOR);
         await this.onSearchBox(page);
 
@@ -53,6 +53,21 @@ export class XgearScraperService {
         return page;
     }
 
+    private async loadMoreProducts(page: Page) {
+        let loadMoreButton;
+        do {
+            loadMoreButton = await page.$(config.LOAD_MORE_BUTTON_SELECTOR);
+            if (loadMoreButton) {
+                await loadMoreButton.click();
+                await new Promise(resolve => setTimeout(resolve, config.DELAY_TIME));
+            }
+        } while (loadMoreButton);
+    }
+
+    private async storeDataToDatabase(data: any) {
+        return this.ProductsService.createMany(data, config.COLLECTION);
+    }
+
     private async extractProducts(page: Page) {
         const productsGridContent = await page.$$eval(config.PRODUCTS_GRID_SELECTOR, (elements) => {
             return elements
@@ -60,9 +75,8 @@ export class XgearScraperService {
                     const config = {
                         PRODUCT_NAME_SELECTOR: 'div.product-info > h2 > a',
                         PRICE_SELECTOR: 'div.product-info > span.price.datit-price-loop > ins',
-                        IMAGE_URL_SELECTOR: 'div.product-thumbnail > a > img',
                         DESCRIPTION_SELECTOR: 'div.product-info > div.show-cauhinh-loop > div.item-cauhinh',
-                        BASE_URL_SELECTOR: 'div.product-info > h2 > a',
+                        URL_SELECTOR: 'div.product-info > h2 > a',
                     }
                     const nameElement = element.querySelector(config.PRODUCT_NAME_SELECTOR);
                     const name = nameElement ? nameElement.textContent.trim() : '';
@@ -71,35 +85,18 @@ export class XgearScraperService {
                         const priceElement = element.querySelector(config.PRICE_SELECTOR);
                         const priceText = priceElement ? priceElement.textContent.trim() : 'Price not available';
                         const price = priceText.includes('Price not available') ? null : parseInt(priceText.replace(/[^\d]/g, ''), 10);
+
                         const description = Array.from(element.querySelectorAll(config.DESCRIPTION_SELECTOR)).map(el => el.textContent.trim());
-                        const imageUrl = element.querySelector(config.IMAGE_URL_SELECTOR).getAttribute('src');
-                        const baseUrl = element.querySelector(config.BASE_URL_SELECTOR).getAttribute('href');
 
+                        const url = element.querySelector(config.URL_SELECTOR).getAttribute('href');
 
-                        return { name, price, description, imageUrl, baseUrl };
+                        return { name, price, description, url };
                     }
-
                     return null;
                 })
                 .filter(product => product !== null);
         });
-        console.log(productsGridContent.length)
+        console.log('Products Scraped: ', productsGridContent.length)
         return productsGridContent;
-    }
-
-    private async loadMoreProducts(page: Page) {
-        const DELAY_TIME = 2000;
-        let loadMoreButton;
-        do {
-            loadMoreButton = await page.$(config.LOAD_MORE_BUTTON_SELECTOR);
-            if (loadMoreButton) {
-                await loadMoreButton.click();
-                await new Promise(resolve => setTimeout(resolve, DELAY_TIME));
-            }
-        } while (loadMoreButton);
-    }
-
-    private async storeDataToDatabase(data: any) {
-        return this.ProductsService.createMany(data, config.COLLECTION);
     }
 }

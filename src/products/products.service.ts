@@ -19,46 +19,43 @@ export class ProductsService {
     }
 
     async createMany(products: CreateProductDto[], collectionName: string): Promise<Product[]> {
+        // remove duplicate products
         const uniqueProducts = Array.from(new Set(products.map(product => product.name)))
-        .map(name => products.find(product => product.name === name));
+            .map(name => products.find(product => product.name === name));
 
         const productModel = this.models.get(collectionName);
-    
         if (!productModel) {
             throw new Error('Invalid collectionName');
         }
-    
+
         const createdProducts = await Promise.all(uniqueProducts.map(async (product) => {
             const existingProduct = await productModel.findOne({ name: product.name });
-    
+
             if (existingProduct) {
-                const { price, description, imageUrl, baseUrl } = product;
-                const version = existingProduct.__v || 0; // Access version from existing document
-    
+                const { price, description, url } = product;
+                const version = existingProduct.__v || 0;
+
                 const updatedProduct = await productModel.findOneAndUpdate(
                     { _id: existingProduct._id, __v: version },
-                    { $set: { price, description, imageUrl, baseUrl, updatedAt: new Date() } },
+                    { $set: { price, description, url, updatedAt: new Date() } },
                     { new: true, runValidators: true }
                 );
-    
+
                 if (!updatedProduct) {
-                    // Handle version conflict
                     throw new Error(`Version conflict for product with id ${existingProduct._id}`);
                 }
-    
+
                 return updatedProduct;
             } else {
                 const newProduct = new productModel({
                     ...product,
                     updatedAt: new Date(),
                 });
-    
+
                 const createdProduct = await newProduct.save();
                 return createdProduct;
             }
         }));
-    
         return createdProducts;
     }
-    
 }
