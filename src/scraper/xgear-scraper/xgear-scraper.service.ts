@@ -27,10 +27,14 @@ export class XgearScraperService {
 
         await this.loadMoreProducts(page);
         const data = await this.extractProducts(page);
-        await this.storeDataToDatabase(data);
+        //await this.storeDataToDatabase(data);
 
         await browser.close();
         return 'Scraped data from xgear.net';
+    }
+
+    private async dataProcess(data: any) {
+        return data
     }
 
     private async handleRequestInterception(page: Page) {
@@ -96,6 +100,7 @@ export class XgearScraperService {
                 })
                 .filter(product => product !== null);
         });
+        console.log('Products Scraped: ', productsGridContent)
         console.log('Products Scraped: ', productsGridContent.length)
         return productsGridContent;
     }

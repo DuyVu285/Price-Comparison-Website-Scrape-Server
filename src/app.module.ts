@@ -7,10 +7,9 @@ import { GearvnScraperService } from './scraper/gearvn-scraper/gearvn-scraper.se
 import { ProductsModule } from './products/products.module';
 import { FptshopScraperService } from './scraper/fptshop-scraper/fptshop-scraper.service';
 import { PhongvuScraperService } from './scraper/phongvu-scraper/phongvu-scraper.service';
-import { ProductsDatabasesIntergrateModule } from './products-databases-intergrate/products-databases-intergrate.module';
 
 @Module({
-  imports: [MongooseModule.forRoot('mongodb://127.0.0.1:27017/PriceComparisonWebsite'), ProductsModule, ProductsDatabasesIntergrateModule],
+  imports: [MongooseModule.forRoot('mongodb://127.0.0.1:27017/PriceComparisonWebsite'), ProductsModule],
   controllers: [AppController],
   providers: [AppService, XgearScraperService, GearvnScraperService, FptshopScraperService, PhongvuScraperService],
 })
