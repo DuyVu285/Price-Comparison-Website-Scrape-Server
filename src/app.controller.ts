@@ -16,12 +16,12 @@ export class AppController {
   }
 
   @Get('scrape-gearvn')
-  scrapeProductsFromGearvn() {
-    return this.appService.scrapeProductsFromGearvn();
+  scrapeProductsFromGearVn() {
+    return this.appService.scrapeProductsFromGearVn();
   }
 
-  @Get('scrape-fptshop')
-  scrapeProductsFromFptshop() {
-    return this.appService.scrapeProductsFromFptshop();
+  @Get('scrape-cellphones')
+  scrapeProductsFromCellphones() {
+    return this.appService.scrapeProductsFromCellphones();
   }
 }

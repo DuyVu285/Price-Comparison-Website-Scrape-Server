@@ -1,30 +1,41 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@Nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type ProductDocument = HydratedDocument<Product>;
 
-@Schema()
+@Schema({ timestamps: true })
 export class Product {
-    @Prop({ required: true })
-    name: string;
+  @Prop()
+  productName: string;
 
-    @Prop()
-    price: number;
+  @Prop({
+    type: [String],
+  })
+  description: string[];
 
-    @Prop({ required: true })
-    description: string[];
+  @Prop()
+  productCode: string;
 
-    @Prop({ required: true })
-    imageUrl: string;
+  @Prop({
+    type: {
+      brand: String,
+      series: String,
+      line: String,
+    },
+  })
+  modelType: {
+    brand: string;
+    series: string;
+    line: string;
+  };
 
-    @Prop({ required: true })
-    baseUrl: string;
-
-    @Prop({ default: Date.now })
-    createdAt: Date;
-
-    @Prop({ default: Date.now })
-    updatedAt: Date;
+  @Prop([
+    {
+      key: { type: String },
+      value: { type: String },
+    },
+  ])
+  prices: { key: string; value: string }[];
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);

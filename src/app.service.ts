@@ -1,12 +1,15 @@
-import { GearvnScraperService } from './scraper/gearvn-scraper/gearvn-scraper.service';
-import { XgearScraperService } from './scraper/xgear-scraper/xgear-scraper.service';
-import { FptshopScraperService } from './scraper/fptshop-scraper/fptshop-scraper.service';
+import { CellphonesScraperService } from './scraper/cellphones-scraper.service';
+import { GearvnScraperService } from './scraper/gearvn-scraper.service';
+import { XgearScraperService } from './scraper/xgear-scraper.service';
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AppService {
-  constructor(private readonly XgearScraperService: XgearScraperService, private readonly GearvnScraperService: GearvnScraperService,
-    private readonly FptshopScraperService: FptshopScraperService) { }
+  constructor(
+    private readonly XgearScraperService: XgearScraperService,
+    private readonly GearvnScraperService: GearvnScraperService,
+    private readonly CellphonesScraperService: CellphonesScraperService,
+  ) {}
   getHello(): string {
     return 'Hello World!';
   }
@@ -15,11 +18,11 @@ export class AppService {
     return this.XgearScraperService.scrapeWebsite();
   }
 
-  scrapeProductsFromGearvn() {
-    return this.GearvnScraperService.scrapeWebsite('https://gearvn.com');
+  scrapeProductsFromGearVn() {
+    return this.GearvnScraperService.scrapeWebsite();
   }
 
-  scrapeProductsFromFptshop() {
-    return this.FptshopScraperService.scrapeWebsite('https://fptshop.com.vn')
+  scrapeProductsFromCellphones() {
+    return this.CellphonesScraperService.scrapeWebsite();
   }
 }
