@@ -4,8 +4,6 @@ import { Model } from 'mongoose';
 import { Models } from 'src/schemas/model.schema';
 import { Product } from 'src/schemas/product.schema';
 import { UnfilteredProduct } from 'src/schemas/unfiltered-product.schema';
-import fuzzy from 'fuzzy';
-import { cosineSimilarity, tfidf } from 'node-nlp';
 
 import * as natural from 'natural';
 const tokenizer = new natural.WordTokenizer();
@@ -18,6 +16,22 @@ export class ProductsService {
     @InjectModel('unfiltered-products')
     private readonly unfilteredProduct: Model<UnfilteredProduct>,
   ) {}
+
+  async filterAndStoreMultipleProducts(dataArray: any[]): Promise<void> {
+    try {
+      await Promise.all(
+        dataArray.map((data) => this.filterAndStoreProduct(data)),
+      );
+      console.log('All products processed successfully');
+    } catch (error) {
+      console.error(
+        `Error in filterAndStoreMultipleProducts: ${error.message}`,
+      );
+      throw new Error(
+        `Unable to filter and store multiple products: ${error.message}`,
+      );
+    }
+  }
 
   async filterAndStoreProduct(data: any): Promise<void> {
     try {
@@ -65,8 +79,8 @@ export class ProductsService {
       const productCode = this.extractProductCode(data.productName, modelName);
       const existingProduct = await this.product.findOne({ productCode });
 
-        if (existingProduct) {
-          await this.updateProductPrice(data, productCode);
+      if (existingProduct) {
+        await this.updateProductPrice(data, productCode);
       } else {
         await this.createNewProduct(data, productCode, modelName);
       }
@@ -145,6 +159,7 @@ export class ProductsService {
     const documents = await this.model.find().exec();
 
     const tokens = tokenizer.tokenize(productName.toLowerCase());
+    console.log('Tokens:', tokens);
 
     for (const doc of documents) {
       const { brand, series, line } = doc.toObject();
