@@ -23,6 +23,8 @@ export class SearchService {
 
       const results = await this.productsService.searchProducts(searchQuery);
 
+      console.log(' Search results:', results);
+
       return results;
     } catch (error) {
       console.error('Error occurred:', error.message);

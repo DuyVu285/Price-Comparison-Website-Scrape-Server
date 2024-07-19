@@ -9,19 +9,4 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
-
-  @Get('scrape-xgear')
-  scrapeProductsFromXgear() {
-    return this.appService.scrapeProductsFromXgear();
-  }
-
-  @Get('scrape-gearvn')
-  scrapeProductsFromGearVn() {
-    return this.appService.scrapeProductsFromGearVn();
-  }
-
-  @Get('scrape-cellphones')
-  scrapeProductsFromCellphones() {
-    return this.appService.scrapeProductsFromCellphones();
-  }
 }

@@ -1,21 +1,34 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Models } from 'src/schemas/model.schema';
 import { Product } from 'src/schemas/product.schema';
 import { UnfilteredProduct } from 'src/schemas/unfiltered-product.schema';
-
 import * as natural from 'natural';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
+import { GridFSBucket, ObjectId } from 'mongodb';
+import { ImagesService } from 'src/images/images.service';
+
 const tokenizer = new natural.WordTokenizer();
 
 @Injectable()
 export class ProductsService {
+  private gfs: GridFSBucket;
+
   constructor(
     @InjectModel('products') private readonly product: Model<Product>,
     @InjectModel('models') private readonly model: Model<Models>,
     @InjectModel('unfiltered-products')
     private readonly unfilteredProduct: Model<UnfilteredProduct>,
-  ) {}
+    @InjectConnection() private readonly connection: Connection,
+    private readonly imagesService: ImagesService,
+  ) {
+    this.gfs = new GridFSBucket(this.connection.db, {
+      bucketName: 'uploads',
+    });
+    this.ensureIndexes();
+  }
 
   async filterAndStoreMultipleProducts(dataArray: any[]): Promise<void> {
     try {
@@ -35,14 +48,16 @@ export class ProductsService {
 
   async filterAndStoreProduct(data: any): Promise<void> {
     try {
+      console.log('Data:', data);
       const modelName = await this.findModelName(data.productName);
-      console.log('Product Brand:', modelName.brand);
-      console.log('Product Series:', modelName.series);
+      console.log('Product:', modelName);
+
+      const imageId = await this.imagesService.storeImage(data.imageUrl);
 
       if (!modelName.brand || !modelName.series) {
-        await this.upsertUnfilteredProduct(data);
+        await this.upsertUnfilteredProduct(data, imageId);
       } else {
-        await this.handleFilteredProduct(data, modelName);
+        await this.handleFilteredProduct(data, modelName, imageId);
       }
     } catch (error) {
       console.error(`Error in filterAndStoreProduct: ${error.message}`);
@@ -50,7 +65,10 @@ export class ProductsService {
     }
   }
 
-  private async upsertUnfilteredProduct(data: any): Promise<void> {
+  private async upsertUnfilteredProduct(
+    data: any,
+    imageId: Types.ObjectId | null,
+  ): Promise<void> {
     try {
       const unfilteredProduct = await this.unfilteredProduct.findOneAndUpdate(
         { productName: data.productName },
@@ -59,6 +77,7 @@ export class ProductsService {
             description: data.description,
             price: data.price,
             url: data.url,
+            imageId,
           },
         },
         { upsert: true, new: true },
@@ -74,6 +93,7 @@ export class ProductsService {
   private async handleFilteredProduct(
     data: any,
     modelName: any,
+    imageId: Types.ObjectId | null,
   ): Promise<void> {
     try {
       const productCode = this.extractProductCode(data.productName, modelName);
@@ -82,7 +102,7 @@ export class ProductsService {
       if (existingProduct) {
         await this.updateProductPrice(data, productCode);
       } else {
-        await this.createNewProduct(data, productCode, modelName);
+        await this.createNewProduct(data, productCode, modelName, imageId);
       }
     } catch (error) {
       console.error(`Error handling filtered product: ${error.message}`);
@@ -128,6 +148,7 @@ export class ProductsService {
     data: any,
     productCode: string,
     modelName: any,
+    imageId: Types.ObjectId | null,
   ): Promise<void> {
     try {
       const productName = data.productName.replace('-', ' ').trim();
@@ -142,6 +163,7 @@ export class ProductsService {
             value: data.price,
           },
         ],
+        imageId,
       });
 
       await newProduct.save();
@@ -159,7 +181,6 @@ export class ProductsService {
     const documents = await this.model.find().exec();
 
     const tokens = tokenizer.tokenize(productName.toLowerCase());
-    console.log('Tokens:', tokens);
 
     for (const doc of documents) {
       const { brand, series, line } = doc.toObject();
@@ -177,11 +198,7 @@ export class ProductsService {
       }
     }
 
-    return {
-      brand: null,
-      series: null,
-      line: null,
-    };
+    return { brand: null, series: null, line: null };
   }
 
   private extractProductCode(productName: string, modelName: any): string {
@@ -203,17 +220,71 @@ export class ProductsService {
     return productCode;
   }
 
-  async searchProducts(query: string): Promise<Product[]> {
-    try {
-      const modelName = await this.findModelName(query);
-      const productCode = this.extractProductCode(query, modelName);
+  async ensureIndexes() {
+    const collection = this.product.db.collection(
+      this.product.collection.collectionName,
+    );
+    const indexes = await collection.indexes();
+    const indexExists = indexes.some(
+      (index) => index.name === 'productName_text',
+    );
+    if (!indexExists) {
+      await collection.createIndex({ productName: 'text' });
+    }
+  }
 
-      const product = await this.product
-        .find({ productName: { $regex: new RegExp(productCode, 'i') } })
+  async searchProducts(query: string): Promise<any[]> {
+    try {
+      const normalizedQuery = query.toLowerCase().trim();
+
+      const fullTextResults = await this.product
+        .find({ $text: { $search: normalizedQuery } })
         .exec();
-      return product;
+
+      const regexPattern = new RegExp(
+        `.*${normalizedQuery.split(' ').join('.*')}.*`,
+        'i',
+      );
+      const regexResults = await this.product
+        .find({ productName: { $regex: regexPattern } })
+        .exec();
+
+      const combinedResults = [...fullTextResults, ...regexResults];
+
+      const uniqueResultsMap = new Map<string, any>();
+      combinedResults.forEach((product) => {
+        if (!uniqueResultsMap.has(product._id.toString())) {
+          uniqueResultsMap.set(product._id.toString(), product);
+        }
+      });
+
+      const uniqueResults = Array.from(uniqueResultsMap.values());
+
+      const scoredResults = uniqueResults.map((product) => {
+        const score = this.calculateRelevanceScore(
+          product.productName,
+          normalizedQuery,
+        );
+        return { ...product.toObject(), score };
+      });
+
+      scoredResults.sort((a, b) => b.score - a.score);
+      return scoredResults.slice(0, 5); //
     } catch (error) {
       throw new Error(`Unable to search products: ${error.message}`);
     }
+  }
+
+  private calculateRelevanceScore(productName: string, query: string): number {
+    const terms = query.split(' ');
+    let score = 0;
+
+    terms.forEach((term) => {
+      if (productName.toLowerCase().includes(term)) {
+        score += 1;
+      }
+    });
+
+    return score;
   }
 }

@@ -20,7 +20,7 @@ export class cellphoneSSearchService {
   constructor(private readonly productsService: ProductsService) {}
 
   async scrapeWebsite(searchQuery: string) {
-    const browser = await puppeteer.launch({ headless: false });
+    const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
     const searchURL = `${this.config.WEB_URL}/catalogsearch/result?q=${searchQuery}`;

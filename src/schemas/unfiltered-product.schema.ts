@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@Nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type UnfilteredProductDocument = HydratedDocument<UnfilteredProduct>;
 
@@ -18,6 +18,9 @@ export class UnfilteredProduct {
 
   @Prop()
   url: string;
+
+  @Prop({ type: Types.ObjectId })
+  imageId: Types.ObjectId;
 }
 
 export const UnfilteredProductSchema = SchemaFactory.createForClass(UnfilteredProduct);

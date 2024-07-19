@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import puppeteer, { ElementHandle, Page } from 'puppeteer';
+import puppeteer, { Page } from 'puppeteer';
 import { ProductsService } from 'src/products/products.service';
 
 @Injectable()
@@ -17,6 +17,7 @@ export class CellphonesScraperService {
       '#trade-price-tabs > div > div > div.tpt-box.has-text-centered.is-flex.is-flex-direction-column.is-flex-wrap-wrap.is-justify-content-center.is-align-items-center.active > p.tpt---sale-price',
     PRICE_SELECTOR_2:
       '#productDetailV2 > section > div.box-detail-product.columns.m-0 > div.box-detail-product__box-center.column.bannerTopHead > div.block-box-price > div.box-info__box-price > p.product__price--show',
+    IMAGE_SELECTOR: '#v2Gallery > div > img',
     LOAD_MORE_BUTTON_SELECTOR:
       '#productListSearch > div.has-text-centered > button',
     DELAY_TIME: 3000,
@@ -24,18 +25,20 @@ export class CellphonesScraperService {
 
   constructor(private readonly productsService: ProductsService) {}
 
-  async scrapeWebsite() {
+  async scrapeWebsite(): Promise<any> {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
     const searchURL = `${this.config.WEB_URL}/catalogsearch/result?q=${this.config.SEARCH_TARGET}`;
     await page.goto(searchURL, { waitUntil: 'networkidle0' });
-    await this.scrapeAllPages(page);
+    const totalItems = await this.scrapeAllPages(page);
 
     await browser.close();
+    const result = { url: this.config.WEB_URL, totalItems: totalItems };
+    return result;
   }
 
-  private async scrapeAllPages(page: Page): Promise<void> {
+  private async scrapeAllPages(page: Page): Promise<number> {
     await this.loadMoreProducts(page);
 
     const productLinks = await page.$$eval(
@@ -59,9 +62,20 @@ export class CellphonesScraperService {
 
     console.log(productLinks);
 
+    let totalItems = 0;
+
     for (const link of productLinks) {
-      await this.rightClickAndScrapeProduct(page, link);
+      try {
+        const productData = await this.rightClickAndScrapeProduct(page, link);
+        if (productData) {
+          totalItems++;
+        }
+      } catch (error) {
+        console.error(`Error scraping product at ${link}:`, error);
+      }
     }
+
+    return totalItems;
   }
 
   private async loadMoreProducts(page: Page) {
@@ -88,7 +102,7 @@ export class CellphonesScraperService {
   private async rightClickAndScrapeProduct(
     page: Page,
     link: string,
-  ): Promise<void> {
+  ): Promise<any> {
     const browser = page.browser();
     const newPagePromise = new Promise<Page>((resolve) =>
       browser.once('targetcreated', (target) => resolve(target.page())),
@@ -99,39 +113,57 @@ export class CellphonesScraperService {
     }, link);
 
     const newPage = await newPagePromise;
-    await newPage.waitForNavigation({ waitUntil: 'domcontentloaded' });
-
-    const data = await this.extractProductData(newPage);
-    await this.filterAndStoreData(data);
-
-    await newPage.close();
+    try {
+      await newPage.waitForNavigation({ waitUntil: 'domcontentloaded' });
+      const data = await this.extractProductData(newPage);
+      if (data) {
+        await this.filterAndStoreData(data);
+      }
+      return data;
+    } catch (error) {
+      console.error(`Error extracting data from ${link}:`, error);
+      return null;
+    } finally {
+      await newPage.close();
+    }
   }
 
   private async extractProductData(page: Page) {
-    const productName = await page.$eval(
-      this.config.PRODUCT_NAME_SELECTOR,
-      (el) => el.textContent.trim(),
-    );
-    const description = await page.$eval(
-      this.config.DESCRIPTION_SELECTOR,
-      (el) => el.textContent.trim(),
-    );
-
-    const priceElement = await page
-      .$eval(this.config.PRICE_SELECTOR, (el) => el.textContent.trim())
-      .catch(
-        async () =>
-          await page.$eval(this.config.PRICE_SELECTOR_2, (el) =>
-            el.textContent.trim(),
-          ),
+    try {
+      const productName = await page.$eval(
+        this.config.PRODUCT_NAME_SELECTOR,
+        (el) => el.textContent.trim(),
       );
 
-    const price = priceElement.replace(/[^\d]/g, '');
-    const url = page.url();
-    const content = { productName, description, price, url };
+      const description = await page.$eval(
+        this.config.DESCRIPTION_SELECTOR,
+        (el) => el.textContent.trim(),
+      );
 
-    console.log('Product Scraped From CellphoneS:', content);
-    return content;
+      const priceElement = await page
+        .$eval(this.config.PRICE_SELECTOR, (el) => el.textContent.trim())
+        .catch(
+          async () =>
+            await page.$eval(this.config.PRICE_SELECTOR_2, (el) =>
+              el.textContent.trim(),
+            ),
+        );
+
+      const price = priceElement.replace(/[^\d]/g, '');
+      const url = page.url();
+
+      const imageUrl = await page.$eval(this.config.IMAGE_SELECTOR, (el) =>
+        el.getAttribute('src'),
+      );
+
+      const content = { productName, description, price, url, imageUrl };
+
+      console.log('Product Scraped From Cellphones:', content);
+      return content;
+    } catch (error) {
+      console.error(`Error extracting product data:`, error);
+      return null;
+    }
   }
 
   private async filterAndStoreData(data: any): Promise<void> {
