@@ -52,7 +52,11 @@ export class ProductsService {
       const modelName = await this.findModelName(data.productName);
       console.log('Product:', modelName);
 
-      const imageId = await this.imagesService.storeImage(data.imageUrl);
+      let imageId = await this.imagesService.storeImage(data.imageUrl);
+
+      if (!imageId) {
+        imageId = data.imageId;
+      }
 
       if (!modelName.brand || !modelName.series) {
         await this.upsertUnfilteredProduct(data, imageId);

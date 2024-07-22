@@ -75,7 +75,7 @@ export class XgearScraperService {
             PRICE_SELECTOR:
               'div.product-detail > div.box-pro-prices > p > span',
             DESCRIPTION_SELECTOR:
-              'div.product-detail > ul.config-tags > li > span',
+              'div.product-detail > ul.config-tags > div > li > span',
             URL_SELECTOR: 'div.product-detail > strong > a',
             IMAGE_SELECTOR: 'div.product-img.has-hover > a > img',
             BASE_URL: 'https://xgear.net',
@@ -122,6 +122,7 @@ export class XgearScraperService {
               } else {
                 const index =
                   RawProductName.toLowerCase().indexOf(descriptionPart);
+                RawProductName.replace(/\(.*?\)/g, '').trim();
                 productName = RawProductName.substring(0, index).trim();
               }
 
