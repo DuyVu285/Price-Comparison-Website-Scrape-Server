@@ -1,26 +1,15 @@
+import { ProductsService } from 'src/products/products.service';
 import { Injectable } from '@nestjs/common';
 import puppeteer, { Page } from 'puppeteer';
-import { ProductsService } from 'src/products/products.service';
 
 @Injectable()
-export class CellphonesScraperService {
+export class LaptopAZScraperService {
   private readonly config = {
-    WEB_URL: 'https://cellphones.com.vn',
-    PRODUCTS_GRID_SELECTOR:
-      '#productListSearch > div.product-list-filter.is-flex.is-flex-wrap-wrap > div',
+    WEB_URL: 'https://laptopaz.vn/',
+    SEARCH_BOX_SELECTOR: '#stext',
     SEARCH_TARGET: 'laptop',
-    PRODUCT_NAME_SELECTOR:
-      '#productDetailV2 > section > div.box-header.is-flex.is-align-items-center.box-header-desktop > div.box-product-name > h1',
-    DESCRIPTION_SELECTOR:
-      '#productDetailV2 > section > div.box-header.is-flex.is-align-items-center.box-header-desktop > div.additional-information.mr-2',
-    PRICE_SELECTOR:
-      '#trade-price-tabs > div > div > div.tpt-box.has-text-centered.is-flex.is-flex-direction-column.is-flex-wrap-wrap.is-justify-content-center.is-align-items-center.active > p.tpt---sale-price',
-    PRICE_SELECTOR_2:
-      '#productDetailV2 > section > div.box-detail-product.columns.m-0 > div.box-detail-product__box-center.column.bannerTopHead > div.block-box-price > div.box-info__box-price > p.product__price--show',
-    IMAGE_SELECTOR: '#v2Gallery > div > img',
-    LOAD_MORE_BUTTON_SELECTOR:
-      '#productListSearch > div.has-text-centered > button',
-    DELAY_TIME: 3000,
+    PRODUCTS_GRID_SELECTOR: '#product > div ',
+    PAGINATION_SELECTOR: 'body > main > div.product-list > div > nav > ul',
   };
 
   constructor(private readonly productsService: ProductsService) {}
@@ -29,8 +18,8 @@ export class CellphonesScraperService {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
-    const searchURL = `${this.config.WEB_URL}/catalogsearch/result?q=${this.config.SEARCH_TARGET}`;
-    await page.goto(searchURL, { waitUntil: 'networkidle0' });
+    const searchURL = `${this.config.WEB_URL}/tim?q=${this.config.SEARCH_TARGET}`;
+    await page.goto(searchURL, { waitUntil: 'domcontentloaded' });
     const totalItems = await this.scrapeAllPages(page);
 
     await browser.close();
@@ -39,134 +28,109 @@ export class CellphonesScraperService {
   }
 
   private async scrapeAllPages(page: Page): Promise<number> {
-    await this.loadMoreProducts(page);
-
-    const productLinks = await page.$$eval(
-      this.config.PRODUCTS_GRID_SELECTOR,
-      (elements) => {
-        return elements
-          .map((element) => {
-            const config = {
-              LINK_SELECTOR: 'div.product-info > a',
-              BASE_URL: 'https://cellphones.com.vn',
-            };
-            const urlElement = element
-              .querySelector(config.LINK_SELECTOR)
-              .getAttribute('href');
-            const url = config.BASE_URL + urlElement;
-            return url;
-          })
-          .filter((link) => link !== null);
-      },
-    );
-
-    console.log(productLinks);
-
+    let currentPage = 1;
     let totalItems = 0;
+    let maxPages = 30;
 
-    for (const link of productLinks) {
-      try {
-        const productData = await this.rightClickAndScrapeProduct(page, link);
-        if (productData) {
-          totalItems++;
-        }
-      } catch (error) {
-        console.error(`Error scraping product at ${link}:`, error);
+    try {
+      while (currentPage <= maxPages) {
+        const nextPage = `${this.config.WEB_URL}/tim?scat_id=&q=${this.config.SEARCH_TARGET}&page=${currentPage}`;
+        await page.goto(nextPage, { waitUntil: 'domcontentloaded' });
+        const data = await this.extractProductsData(page);
+        console.log(`Data`, data);
+        totalItems += data.length;
+        await this.filterAndStoreData(data);
+
+        currentPage++;
       }
+    } catch (error) {
+      console.error(`Error scraping page ${currentPage}:`, error);
     }
 
     return totalItems;
   }
 
-  private async loadMoreProducts(page: Page) {
-    let hasNextPage = true;
-    let clickCount = 0;
-    const maxClicks = 8;
-
-    while (hasNextPage && clickCount < maxClicks) {
-      const loadMoreButton = await page.$(
-        this.config.LOAD_MORE_BUTTON_SELECTOR,
-      );
-      if (loadMoreButton) {
-        await loadMoreButton.click();
-        clickCount++;
-        await new Promise((resolve) =>
-          setTimeout(resolve, this.config.DELAY_TIME),
-        );
-      } else {
-        hasNextPage = false;
-      }
-    }
-  }
-
-  private async rightClickAndScrapeProduct(
-    page: Page,
-    link: string,
-  ): Promise<any> {
-    const browser = page.browser();
-    const newPagePromise = new Promise<Page>((resolve) =>
-      browser.once('targetcreated', (target) => resolve(target.page())),
-    );
-
-    await page.evaluate((link) => {
-      window.open(link, '_blank');
-    }, link);
-
-    const newPage = await newPagePromise;
-    try {
-      await newPage.waitForNavigation({ waitUntil: 'domcontentloaded' });
-      const data = await this.extractProductData(newPage);
-      if (data) {
-        await this.filterAndStoreData(data);
-      }
-      return data;
-    } catch (error) {
-      console.error(`Error extracting data from ${link}:`, error);
-      return null;
-    } finally {
-      await newPage.close();
-    }
-  }
-
-  private async extractProductData(page: Page) {
-    try {
-      const productName = await page.$eval(
-        this.config.PRODUCT_NAME_SELECTOR,
-        (el) => el.textContent.trim(),
-      );
-
-      const description = await page.$eval(
-        this.config.DESCRIPTION_SELECTOR,
-        (el) => el.textContent.trim(),
-      );
-
-      const priceElement = await page
-        .$eval(this.config.PRICE_SELECTOR, (el) => el.textContent.trim())
-        .catch(
-          async () =>
-            await page.$eval(this.config.PRICE_SELECTOR_2, (el) =>
-              el.textContent.trim(),
-            ),
-        );
-
-      const price = priceElement.replace(/[^\d]/g, '');
-      const url = page.url();
-
-      const imageUrl = await page.$eval(this.config.IMAGE_SELECTOR, (el) =>
-        el.getAttribute('src'),
-      );
-
-      const content = { productName, description, price, url, imageUrl };
-
-      console.log('Product Scraped From Cellphones:', content);
-      return content;
-    } catch (error) {
-      console.error(`Error extracting product data:`, error);
-      return null;
-    }
-  }
-
   private async filterAndStoreData(data: any): Promise<void> {
-    await this.productsService.filterAndStoreProduct(data);
+    for (const product of data) {
+      try {
+        await this.productsService.filterAndStoreProduct(product);
+      } catch (error) {
+        console.error('Error storing product:', product, error);
+      }
+    }
+  }
+
+  private async extractProductsData(page: Page) {
+    try {
+      const productsGridContent = await page.$$eval(
+        this.config.PRODUCTS_GRID_SELECTOR,
+        (elements) => {
+          const config = {
+            PRODUCT_NAME_SELECTOR: 'div.p-emtry > a',
+            PRICE_SELECTOR: 'div.p-emtry > span.p-price',
+            URL_SELECTOR: 'div.p-emtry > a',
+            IMAGE_SELECTOR: 'div.p-img > a > img',
+            BASE_URL: 'https://laptopaz.vn',
+          };
+
+          return elements
+            .map((element) => {
+              const nameElement = element.querySelector(
+                config.PRODUCT_NAME_SELECTOR,
+              );
+              const RawProductName = nameElement
+                ? nameElement.textContent.trim()
+                : '';
+
+              const cleanedName = RawProductName.replace(/\[.*?\]/g, '').trim();
+
+              const match = cleanedName.match(/\((.*?)\)/);
+              const description = match ? match[1] : '';
+              const productName = cleanedName.replace(/\(.*?\)/g, '').trim();
+
+              if (
+                !productName.toLowerCase().includes('laptop') ||
+                productName.toLowerCase().includes('ram laptop') ||
+                productName.toLowerCase().includes('hdd') ||
+                productName.toLowerCase().includes('ssd')
+              ) {
+                return null;
+              }
+
+              const priceElement = element.querySelector(config.PRICE_SELECTOR);
+              const priceText = priceElement
+                ? priceElement.textContent.trim()
+                : 'Price not available';
+
+              const priceMatch = priceText.match(/(\d{1,3}(?:\.\d{3})*)/);
+              const price = priceMatch
+                ? priceMatch[0].replace(/\./g, '').toString()
+                : null;
+
+              if (price === null || price === '') {
+                return null;
+              }
+
+              const urlElement = element
+                .querySelector(config.URL_SELECTOR)
+                .getAttribute('href');
+              const url = config.BASE_URL + urlElement;
+
+              const imageElement = element.querySelector(config.IMAGE_SELECTOR);
+              const imageUrl = imageElement
+                ? new URL(imageElement.getAttribute('src'), config.BASE_URL)
+                    .href
+                : null;
+
+              return { productName, price, description, url, imageUrl };
+            })
+            .filter((product) => product !== null);
+        },
+      );
+      return productsGridContent;
+    } catch (error) {
+      console.error('Error extracting products data:', error);
+      return [];
+    }
   }
 }

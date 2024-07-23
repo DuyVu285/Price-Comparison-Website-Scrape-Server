@@ -6,7 +6,7 @@ import { GearvnScraperService } from '../web/gearvn-scraper.service';
 import { XgearScraperService } from '../web/xgear-scraper.service';
 import { ProductsModule } from 'src/products/products.module';
 import { AnPhatPCScraperService } from '../web/anphatpc-scraper.service';
-
+import { LaptopAZScraperService } from '../web/laptopaz-scraper.service';
 @Module({
   imports: [ProductsModule],
   controllers: [ScraperController],
@@ -15,7 +15,8 @@ import { AnPhatPCScraperService } from '../web/anphatpc-scraper.service';
     CellphonesScraperService,
     GearvnScraperService,
     XgearScraperService,
-    AnPhatPCScraperService
+    AnPhatPCScraperService,
+    LaptopAZScraperService,
   ],
 })
 export class ScraperModule {}

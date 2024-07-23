@@ -107,6 +107,10 @@ export class XgearScraperService {
                 ? null
                 : priceText.replace(/[^\d]/g, '').toString();
 
+              if (price === null || price === '') {
+                return null;
+              }
+
               const descriptionElements = Array.from(
                 element.querySelectorAll(config.DESCRIPTION_SELECTOR),
               );

@@ -29,4 +29,9 @@ export class ScraperController {
   scrapeAnPhatPC() {
     return this.scraperService.scrapeAnPhatPCSite();
   }
+
+  @Get('scrape/laptopaz')
+  scrapeLaptopAz() {
+    return this.scraperService.scrapeLaptopAzSite();
+  }
 }

@@ -48,12 +48,12 @@ export class ProductsService {
 
   async filterAndStoreProduct(data: any): Promise<void> {
     try {
-      console.log('Data:', data);
       const modelName = await this.findModelName(data.productName);
       console.log('Product:', modelName);
 
       let imageId = await this.imagesService.storeImage(data.imageUrl);
 
+      console.log('imageId', imageId);
       if (!imageId) {
         imageId = data.imageId;
       }
@@ -177,25 +177,31 @@ export class ProductsService {
     }
   }
 
-  private async findModelName(productName: string): Promise<{
+  async findModelName(productName: string): Promise<{
     brand: string | null;
     series: string | null;
     line: string | null;
   }> {
     const documents = await this.model.find().exec();
-
+    const tokenizer = new natural.WordTokenizer();
     const tokens = tokenizer.tokenize(productName.toLowerCase());
 
     for (const doc of documents) {
       const { brand, series, line } = doc.toObject();
 
-      const brandTokens = tokenizer.tokenize(brand?.toLowerCase());
-      const seriesTokens = tokenizer.tokenize(series?.toLowerCase());
-      const lineTokens = tokenizer.tokenize(line?.toLowerCase());
+      if (!brand || !series) {
+        continue; // Skip this document if brand or series is not defined
+      }
+
+      const brandTokens = tokenizer.tokenize(brand.toLowerCase());
+      const seriesTokens = tokenizer.tokenize(series.toLowerCase());
+      const lineTokens = line ? tokenizer.tokenize(line.toLowerCase()) : [];
 
       const brandMatch = brandTokens.every((token) => tokens.includes(token));
       const seriesMatch = seriesTokens.every((token) => tokens.includes(token));
-      const lineMatch = lineTokens.every((token) => tokens.includes(token));
+      const lineMatch =
+        lineTokens.length === 0 ||
+        lineTokens.every((token) => tokens.includes(token));
 
       if (brandMatch && seriesMatch && lineMatch) {
         return { brand, series, line };

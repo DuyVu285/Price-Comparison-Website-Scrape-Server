@@ -81,7 +81,7 @@ export class CellphonesScraperService {
   private async loadMoreProducts(page: Page) {
     let hasNextPage = true;
     let clickCount = 0;
-    const maxClicks = 8;
+    const maxClicks = 10;
 
     while (hasNextPage && clickCount < maxClicks) {
       const loadMoreButton = await page.$(
@@ -137,7 +137,10 @@ export class CellphonesScraperService {
 
       const description = await page.$eval(
         this.config.DESCRIPTION_SELECTOR,
-        (el) => el.textContent.trim(),
+        (el) => {
+          const textContent = el.textContent.trim();
+          return textContent.split('/').map((part) => part.trim());
+        },
       );
 
       const priceElement = await page
@@ -148,8 +151,12 @@ export class CellphonesScraperService {
               el.textContent.trim(),
             ),
         );
-
       const price = priceElement.replace(/[^\d]/g, '');
+
+      if (price === null || price === '') {
+        return null;
+      }
+      
       const url = page.url();
 
       const imageUrl = await page.$eval(this.config.IMAGE_SELECTOR, (el) =>

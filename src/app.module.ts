@@ -3,7 +3,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ProductsModule } from './products/products.module';
-import { SearchModule } from './scrape-search/search/search.module';
 import { ScraperModule } from './scraper/scraper/scraper.module';
 import { ImagesModule } from './images/images.module';
 
@@ -11,7 +10,6 @@ import { ImagesModule } from './images/images.module';
   imports: [
     MongooseModule.forRoot('mongodb://127.0.0.1:27017/PriceComparisonWebsite'),
     ProductsModule,
-    SearchModule,
     ScraperModule,
     ImagesModule,
   ],

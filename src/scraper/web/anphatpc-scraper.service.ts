@@ -17,7 +17,7 @@ export class AnPhatPCScraperService {
   constructor(private readonly productsService: ProductsService) {}
 
   async scrapeWebsite(): Promise<any> {
-    const browser = await puppeteer.launch({ headless: false });
+    const browser = await puppeteer.launch();
     const page = await browser.newPage();
 
     const searchURL = `${this.config.WEB_URL}/tim?scat_id=&q=${this.config.SEARCH_TARGET}`;
@@ -111,6 +111,9 @@ export class AnPhatPCScraperService {
                 ? null
                 : priceText.replace(/[^\d]/g, '').toString();
 
+              if (price === null || price === '') {
+                return null;
+              }
               const descriptionElements = Array.from(
                 element.querySelectorAll(config.DESCRIPTION_SELECTOR),
               );

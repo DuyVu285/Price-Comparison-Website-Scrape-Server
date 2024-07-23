@@ -117,6 +117,10 @@ export class GearvnScraperService {
                 ? null
                 : priceText.replace(/[^\d]/g, '');
 
+                if (price === null || price === '') {
+                  return null;
+                }
+
               const descriptionElements = Array.from(
                 element.querySelectorAll(config.DESCRIPTION_SELECTOR),
               );
